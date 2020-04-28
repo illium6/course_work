@@ -4,7 +4,7 @@ from collections import defaultdict
 name_box_id = defaultdict(list)
 id_name = dict()
 f = open(
-    "/home/georgiy/PycharmProjects/nnki/Dataset/raw/coco.json",
+    "/home/georgiy/PycharmProjects/course_work/Dataset/raw/coco.json",
     encoding='utf-8')
 data = json.load(f)
 
@@ -16,7 +16,7 @@ for ant in annotations:
 
     for i in range(len(images)):
         if id == images[i]['id']:
-            name = '../../Dataset/raw/{}'.format(images[i]['file_name'])
+            name = '../Dataset/raw/{}'.format(images[i]['file_name'])
             break
 
     cat = ant['category_id'] - 1

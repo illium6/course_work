@@ -45,6 +45,7 @@ def _main():
     np.random.seed(10101)
     np.random.shuffle(lines)
     np.random.seed(None)
+
     num_val = int(len(lines) * val_split)
     num_train = len(lines) - num_val
 
@@ -63,7 +64,7 @@ def _main():
                             validation_data=data_generator_wrapper(lines[num_train:], batch_size, input_shape, anchors,
                                                                    num_classes),
                             validation_steps=max(1, num_val // batch_size),
-                            epochs=1,
+                            epochs=100,
                             initial_epoch=0,
                             callbacks=[checkpoint])
         model.save_weights(log_dir + 'trained_weights_stage_1.h5')
@@ -71,25 +72,43 @@ def _main():
     # Unfreeze and continue training, to fine-tune.
     # Train longer if the result is not good.
     if True:
-        vram = 4  # note: num of layers divided on this must be int!
+        vram = 4  # note: num of layers divided on this must be int! layers = 256
+        if vram == 1:
+            calc_list = list(range(0, len(model.layers) + 1))
+        else:
+            calc_list = list(range(0, len(model.layers) + 1, len(model.layers) // vram))
+
         for j in range(vram):  # trying to fit model into 4gb vram
-            for i in range(len(model.layers) // 4):
-                model.layers[i].trainable = True
+
+            print('Freeze all layers')
+            for i in range(len(model.layers)):
+                model.layers[i].trainable = False
+
+            if vram != 1:
+                print(f'Unfreeze {calc_list[0 + j]}-{calc_list[1 + j]} layers')
+                for i in range(calc_list[0 + j], calc_list[1 + j]):
+                    model.layers[i].trainable = True
+            else:
+                print(f'Unfreeze all layers')
+                for i in range(len(model.layers)):
+                    model.layers[i].trainable = True
+
             # model.load_weights('logs/000/trained_weights_stage_1.h5')
             model.compile(optimizer=Adam(lr=1e-4),
                           loss={'yolo_loss': lambda y_true, y_pred: y_pred})  # recompile to apply the change
-            print('Unfreeze all of the layers.')
 
             batch_size = 2  # note that more GPU memory is required after unfreezing the body
-            print('Train on {} samples, val on {} samples, with batch size {}.'.format(num_train, num_val, batch_size))
-            model.fit_generator(data_generator_wrapper(lines[:num_train], batch_size, input_shape, anchors, num_classes),
-                                steps_per_epoch=max(1, num_train // batch_size),
-                                validation_data=data_generator_wrapper(lines[num_train:], batch_size, input_shape, anchors,
+            dataset_divide = 1
+            print('Train on {} samples, val on {} samples, with batch size {}.'.format(num_train // dataset_divide, num_val // dataset_divide, batch_size))
+            model.fit_generator(data_generator_wrapper(lines[:num_train:dataset_divide], batch_size, input_shape, anchors, num_classes),
+                                steps_per_epoch=max(1, num_train // (batch_size * dataset_divide)),
+                                validation_data=data_generator_wrapper(lines[num_train::dataset_divide], batch_size, input_shape, anchors,
                                                                        num_classes),
-                                validation_steps=max(1, num_val // batch_size),
-                                epochs=2,
-                                initial_epoch=2,
+                                validation_steps=max(1, num_val // (batch_size * dataset_divide)),
+                                epochs=120,
+                                initial_epoch=100,
                                 callbacks=[checkpoint, reduce_lr, early_stopping])
+            model.save_weights(log_dir + f'interval_results_{j}.h5')
         model.save_weights(log_dir + 'trained_model_final.h5')
 
     # Further training if needed.
@@ -131,7 +150,8 @@ def create_model(input_shape, anchors, num_classes, load_pretrained=True, freeze
         if freeze_body in [1, 2]:
             # Freeze darknet53 body or freeze all but 3 output layers.
             num = (185, len(model_body.layers) - 3)[freeze_body - 1]
-            for i in range(num): model_body.layers[i].trainable = False
+            for i in range(num):
+                model_body.layers[i].trainable = False
             print('Freeze the first {} layers of total {} layers.'.format(num, len(model_body.layers)))
 
     model_loss = Lambda(yolo_loss, output_shape=(1,), name='yolo_loss',
