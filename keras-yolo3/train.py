@@ -51,7 +51,7 @@ def _main():
 
     # Train with frozen layers first, to get a stable loss.
     # Adjust num epochs to your dataset. This step is enough to obtain a not bad model.
-    if True:
+    if False:
         model.compile(optimizer=Adam(lr=1e-3), loss={
             # use custom yolo_loss Lambda layer.
             'yolo_loss': lambda y_true, y_pred: y_pred})
@@ -77,7 +77,7 @@ def _main():
             calc_list = list(range(0, len(model.layers) + 1))
         else:
             calc_list = list(range(0, len(model.layers) + 1, len(model.layers) // vram))
-
+        model.load_weights('logs/000/trained_weights_stage_1.h5')
         for j in range(vram):  # trying to fit model into 4gb vram
 
             print('Freeze all layers')
@@ -93,24 +93,22 @@ def _main():
                 for i in range(len(model.layers)):
                     model.layers[i].trainable = True
 
-            # model.load_weights('logs/000/trained_weights_stage_1.h5')
             model.compile(optimizer=Adam(lr=1e-4),
                           loss={'yolo_loss': lambda y_true, y_pred: y_pred})  # recompile to apply the change
 
             batch_size = 2  # note that more GPU memory is required after unfreezing the body
-            dataset_divide = 1
+            dataset_divide = 4
             print('Train on {} samples, val on {} samples, with batch size {}.'.format(num_train // dataset_divide, num_val // dataset_divide, batch_size))
             model.fit_generator(data_generator_wrapper(lines[:num_train:dataset_divide], batch_size, input_shape, anchors, num_classes),
                                 steps_per_epoch=max(1, num_train // (batch_size * dataset_divide)),
                                 validation_data=data_generator_wrapper(lines[num_train::dataset_divide], batch_size, input_shape, anchors,
                                                                        num_classes),
                                 validation_steps=max(1, num_val // (batch_size * dataset_divide)),
-                                epochs=120,
-                                initial_epoch=100,
+                                epochs=20 + j * 20,
+                                initial_epoch=0 + j * 20,
                                 callbacks=[checkpoint, reduce_lr, early_stopping])
             model.save_weights(log_dir + f'interval_results_{j}.h5')
         model.save_weights(log_dir + 'trained_model_final.h5')
-
     # Further training if needed.
 
 
