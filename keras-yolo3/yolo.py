@@ -21,14 +21,12 @@ import os
 from keras.utils import multi_gpu_model
 
 
-
 class YOLO(object):
 
     tf.compat.v1.disable_v2_behavior()
     tf.config.experimental.set_memory_growth(tf.config.list_physical_devices('GPU')[0], True)
     _defaults = {
-
-        "model_path": 'logs/000/trained_model_final.h5',
+        "model_path": 'logs/000/model_v2_wop.h5',
         "anchors_path": 'model_data/yolo_anchors.txt',
         "classes_path": 'model_data/coco_classes.txt',
         "score": 0.15,
@@ -141,17 +139,26 @@ class YOLO(object):
         '''
         return result
             
-    def detect_image(self, image):
+    def detect_image(self, image, with_mask=False):
         start = timer()
 
-        if self.model_image_size != (None, None):
-            assert self.model_image_size[0]%32 == 0, 'Multiples of 32 required'
-            assert self.model_image_size[1]%32 == 0, 'Multiples of 32 required'
-            boxed_image = letterbox_image(image, tuple(reversed(self.model_image_size)))
+        if with_mask:
+            mask_path = 'mask_kp.png'
+            mask = np.asarray(Image.open(mask_path))
+            mask = np.delete(mask, 3, axis=2).astype(np.bool)
+            image_array = np.asarray(image)
+            image_with_mask = Image.fromarray(image_array * mask)
         else:
-            new_image_size = (image.width - (image.width % 32),
-                              image.height - (image.height % 32))
-            boxed_image = letterbox_image(image, new_image_size)
+            image_with_mask = image
+
+        if self.model_image_size != (None, None):
+            assert self.model_image_size[0] % 32 == 0, 'Multiples of 32 required'
+            assert self.model_image_size[1] % 32 == 0, 'Multiples of 32 required'
+            boxed_image = letterbox_image(image_with_mask, tuple(reversed(self.model_image_size)))
+        else:
+            new_image_size = (image_with_mask.width - (image_with_mask.width % 32),
+                              image_with_mask.height - (image_with_mask.height % 32))
+            boxed_image = letterbox_image(image_with_mask, new_image_size)
         image_data = np.array(boxed_image, dtype='float32')
 
         print(image_data.shape)
@@ -164,11 +171,11 @@ class YOLO(object):
                 self.input_image_shape: [image.size[1], image.size[0]],
                 K.learning_phase(): 0
             })
-        # print(out_boxes, '\n', out_scores, '\n', out_classes)
         print('Found {} boxes for {}'.format(len(out_boxes), 'img'))
 
         font = ImageFont.truetype(font='font/FiraMono-Medium.otf',
                     size=np.floor(3e-2 * image.size[1] + 0.5).astype('int32'))
+        # font = ImageFont.truetype(font='font/FiraMono-Medium.otf', size=1)
         thickness = (image.size[0] + image.size[1]) // 600
 
         for i, c in reversed(list(enumerate(out_classes))):
@@ -282,6 +289,7 @@ def detect_video_trc(yolo, video_path, output_path=""):
             break
     yolo.close_session()
 
+
 def detect_video(yolo, video_path, output_path=''):
     import cv2
     vid = cv2.VideoCapture(video_path)
@@ -294,7 +302,7 @@ def detect_video(yolo, video_path, output_path=''):
     isOutput = True if output_path != "" else False
     if isOutput:
         print("!!! TYPE:", type(output_path), type(video_FourCC), type(video_fps), type(video_size))
-        out = cv2.VideoWriter(output_path, video_FourCC, video_fps, video_size)
+        out = cv2.VideoWriter(output_path, video_FourCC, 25, video_size)
     accum_time = 0
     curr_fps = 0
     fps = "FPS: ??"

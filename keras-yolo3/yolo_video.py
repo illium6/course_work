@@ -26,7 +26,7 @@ def detect_img(yolo):
             print('Open Error! Try again!')
             continue
         else:
-            r_image = yolo.detect_image(image)
+            r_image = yolo.detect_image(image, with_mask=True)
             r_image.show()
             r_image.save('out12.png')
     yolo.close_session()
@@ -68,13 +68,12 @@ if __name__ == '__main__':
     Command line positional arguments -- for video detection mode
     '''
     parser.add_argument(
-        "--input", nargs='?', type=str,required=False,default='./path2your_video',
-        help = "Video input path"
+        "--input", nargs='?', type=str, required=False, help="Video input path"
     )
 
     parser.add_argument(
-        "--output", nargs='?', type=str, default="",
-        help = "[Optional] Video output path"
+        "--output", nargs='?', type=str, default="./results",
+        help="[Optional] Video output path"
     )
 
     FLAGS = parser.parse_args()
