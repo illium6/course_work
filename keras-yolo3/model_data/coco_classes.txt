@@ -1,0 +1,14 @@
+car
+minibus
+trolleybus
+tram
+truck
+bus
+middle_bus
+ambulance
+fire_truck
+middle_truck
+tractor
+uncategorized
+van
+person
